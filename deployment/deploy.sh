@@ -5,6 +5,10 @@
 
 set -e  # 遇到错误立即退出
 
+# 获取脚本所在目录的绝对路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -187,8 +191,8 @@ deploy_docker() {
     cd $DEPLOY_DIR
     
     # 复制配置文件
-    cp ../deployment/docker-compose.yml .
-    cp ../deployment/.env.example .env
+    cp "$SCRIPT_DIR/docker-compose.yml" .
+    cp "$SCRIPT_DIR/.env.example" .env
     
     # 更新环境变量
     sed -i "s/your-domain.com/$DOMAIN/g" .env
@@ -391,7 +395,7 @@ EOF
 setup_systemd() {
     log_info "配置 systemd 服务..."
     
-    sudo cp ../deployment/synapse.service /etc/systemd/system/
+    sudo cp "$SCRIPT_DIR/synapse.service" /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable synapse
     sudo systemctl start synapse
@@ -431,7 +435,7 @@ setup_nginx() {
     log_info "配置 Nginx..."
     
     # 复制配置文件
-    sudo cp ../deployment/nginx-synapse.conf /etc/nginx/sites-available/synapse
+    sudo cp "$SCRIPT_DIR/nginx-synapse.conf" /etc/nginx/sites-available/synapse
     
     # 更新域名
     sudo sed -i "s/your-domain.com/$DOMAIN/g" /etc/nginx/sites-available/synapse
