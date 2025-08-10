@@ -1,0 +1,219 @@
+# Synapse Matrix 服务器配置文件 - Supabase 版本
+# 包含好友管理功能和 Supabase 数据库集成
+
+# 服务器基本配置
+server_name: "${SYNAPSE_SERVER_NAME}"
+pid_file: /data/homeserver.pid
+web_client_location: https://app.element.io/
+public_baseurl: https://${SYNAPSE_SERVER_NAME}/
+
+# 监听配置
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: false
+
+  - port: 8448
+    tls: false
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [federation]
+        compress: false
+
+# Supabase PostgreSQL 数据库配置
+database:
+  name: psycopg2
+  args:
+    user: ${SUPABASE_DB_USER}
+    password: ${SUPABASE_DB_PASSWORD}
+    database: ${SUPABASE_DB_NAME}
+    host: ${SUPABASE_DB_HOST}
+    port: ${SUPABASE_DB_PORT}
+    sslmode: require
+    cp_min: 5
+    cp_max: 20
+    keepalives_idle: 10
+    keepalives_interval: 10
+    keepalives_count: 3
+
+# Redis 配置（可选，用于缓存）
+redis:
+  enabled: ${REDIS_ENABLED:-false}
+  host: ${REDIS_HOST:-localhost}
+  port: ${REDIS_PORT:-6379}
+  password: ${REDIS_PASSWORD}
+  dbid: 0
+
+# 日志配置
+log_config: "/config/log.config"
+
+# 媒体存储配置
+media_store_path: "/data/media_store"
+max_upload_size: ${MAX_UPLOAD_SIZE:-50M}
+max_image_pixels: 32M
+dynamic_thumbnails: false
+
+# URL 预览配置
+url_preview_enabled: true
+url_preview_ip_range_blacklist:
+  - '127.0.0.0/8'
+  - '10.0.0.0/8'
+  - '172.16.0.0/12'
+  - '192.168.0.0/16'
+  - '100.64.0.0/10'
+  - '169.254.0.0/16'
+  - '::1/128'
+  - 'fe80::/64'
+  - 'fc00::/7'
+url_preview_url_blacklist:
+  - netloc: "twitter.com"
+  - netloc: "*.twitter.com"
+
+# 注册和用户配置
+enable_registration: ${ENABLE_REGISTRATION:-false}
+registration_shared_secret: "${REGISTRATION_SHARED_SECRET}"
+allow_guest_access: false
+enable_registration_captcha: false
+
+# 安全配置
+macaroon_secret_key: "${MACAROON_SECRET_KEY}"
+form_secret: "${FORM_SECRET}"
+signing_key_path: "/data/signing.key"
+
+# 信任的密钥服务器
+trusted_key_servers:
+  - server_name: "matrix.org"
+
+# 联邦配置
+federation_domain_whitelist: []
+send_federation: true
+federation_metrics_domains:
+  - matrix.org
+  - vector.im
+
+# 速率限制
+rc_message:
+  per_second: 0.2
+  burst_count: 10
+
+rc_registration:
+  per_second: 0.17
+  burst_count: 3
+
+rc_login:
+  address:
+    per_second: 0.17
+    burst_count: 3
+  account:
+    per_second: 0.17
+    burst_count: 3
+  failed_attempts:
+    per_second: 0.17
+    burst_count: 3
+
+# 好友管理功能配置
+friends:
+  enabled: ${FRIENDS_ENABLED:-true}
+  max_friends_per_user: ${MAX_FRIENDS_PER_USER:-1000}
+  friend_request_timeout: ${FRIEND_REQUEST_TIMEOUT:-604800}  # 7 days
+  allow_cross_domain_friends: ${ALLOW_CROSS_DOMAIN_FRIENDS:-true}
+  friend_request_rate_limit:
+    per_second: 0.1
+    burst_count: 5
+
+# 缓存配置
+caches:
+  global_factor: ${CACHE_FACTOR:-0.5}
+  expire_caches: true
+  cache_entry_ttl: 30m
+  sync_response_cache_duration: 2m
+
+# 推送配置
+push:
+  include_content: true
+  group_unread_count_by_room: false
+
+# 应用服务配置
+app_service_config_files: []
+
+# 统计报告
+report_stats: ${REPORT_STATS:-false}
+
+# 房间目录配置
+room_list_publication_rules:
+  - user_id: "*"
+    alias: "*"
+    room_id: "*"
+    action: allow
+
+# 用户目录配置
+user_directory:
+  enabled: true
+  search_all_users: false
+  prefer_local_users: true
+
+# 密码配置
+password_config:
+  enabled: true
+  policy:
+    minimum_length: 8
+    require_digit: false
+    require_symbol: false
+    require_lowercase: false
+    require_uppercase: false
+
+# 邮件配置（可选）
+email:
+  smtp_host: ${SMTP_HOST}
+  smtp_port: ${SMTP_PORT:-587}
+  smtp_user: ${SMTP_USER}
+  smtp_pass: ${SMTP_PASS}
+  require_transport_security: true
+  notif_from: "Matrix <noreply@${SYNAPSE_SERVER_NAME}>"
+  app_name: Matrix
+  enable_notifs: false
+  notif_for_new_users: false
+
+# 第三方身份验证（可选）
+oidc_providers: []
+sso:
+  client_whitelist:
+    - https://app.element.io
+    - https://element.io
+
+# 实验性功能
+experimental_features:
+  spaces_enabled: true
+  msc3026_enabled: true
+  msc2716_enabled: false
+
+# 工作进程配置（单实例部署）
+worker_app: synapse.app.homeserver
+worker_log_config: /config/log.config
+
+# 安全头配置
+serve_server_wellknown: true
+
+# 管理 API 配置
+enable_media_repo: true
+max_avatar_size: 10M
+allowed_avatar_mimetypes: ["image/png", "image/jpeg", "image/gif"]
+
+# 房间配置
+default_room_version: "9"
+room_prejoin_state:
+  additional_event_types:
+    - org.matrix.msc3173.room.type
+
+# 设备配置
+max_device_display_name_length: 100
+
+# 事件配置
+max_state_events_per_room: 100000

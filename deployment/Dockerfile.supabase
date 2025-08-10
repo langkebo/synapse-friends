@@ -1,0 +1,66 @@
+# Supabase Synapse Matrix 服务器 Dockerfile
+# 基于官方 Python 镜像构建，包含好友管理功能
+
+FROM python:3.11-slim-bullseye
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    libjpeg-dev \
+    libpq-dev \
+    libssl-dev \
+    libwebp-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建应用用户
+RUN groupadd -r synapse && useradd -r -g synapse synapse
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制项目文件
+COPY . /app/
+
+# 安装 Python 依赖
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install -e .[postgres,redis]
+
+# 创建必要的目录
+RUN mkdir -p /data /config /logs \
+    && chown -R synapse:synapse /data /config /logs /app
+
+# 复制配置文件模板
+COPY deployment/supabase-homeserver.yaml /config/homeserver.yaml.template
+COPY deployment/supabase-log.config /config/log.config
+
+# 复制启动脚本
+COPY deployment/supabase-start.sh /start.sh
+RUN chmod +x /start.sh
+
+# 切换到应用用户
+USER synapse
+
+# 暴露端口
+EXPOSE 8008 8448
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8008/health || exit 1
+
+# 设置数据卷
+VOLUME ["/data", "/config", "/logs"]
+
+# 启动命令
+CMD ["/start.sh"]

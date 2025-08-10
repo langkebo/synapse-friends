@@ -28,6 +28,7 @@ from synapse.rest.client import (
     directory,
     events,
     filter,
+    friends,
     initial_sync,
     keys,
     knock,
@@ -130,6 +131,7 @@ class ClientRestResource(JsonResource):
             thirdparty.register_servlets(hs, client_resource)
         sendtodevice.register_servlets(hs, client_resource)
         user_directory.register_servlets(hs, client_resource)
+        friends.register_servlets(hs, client_resource)
         if is_main_process:
             room_upgrade_rest_servlet.register_servlets(hs, client_resource)
         capabilities.register_servlets(hs, client_resource)

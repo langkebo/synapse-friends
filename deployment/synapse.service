@@ -1,0 +1,34 @@
+[Unit]
+Description=Synapse Matrix homeserver
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=synapse
+Group=synapse
+WorkingDirectory=/opt/synapse
+ExecStart=/opt/synapse/bin/python -m synapse.app.homeserver --config-path=/etc/synapse/homeserver.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=3
+SyslogIdentifier=synapse
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/synapse /var/log/synapse
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Environment
+Environment=PYTHONPATH=/opt/synapse
+Environment=SYNAPSE_CONFIG_PATH=/etc/synapse/homeserver.yaml
+
+[Install]
+WantedBy=multi-user.target

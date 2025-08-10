@@ -108,6 +108,7 @@ from synapse.handlers.sync import SyncHandler
 from synapse.handlers.typing import FollowerTypingHandler, TypingWriterHandler
 from synapse.handlers.user_directory import UserDirectoryHandler
 from synapse.handlers.worker_lock import WorkerLocksHandler
+from synapse.handlers.friends import FriendsHandler
 from synapse.http.client import (
     InsecureInterceptableContextFactory,
     ReplicationClient,
@@ -709,6 +710,10 @@ class HomeServer(metaclass=abc.ABCMeta):
     @cache_in_self
     def get_user_directory_handler(self) -> UserDirectoryHandler:
         return UserDirectoryHandler(self)
+
+    @cache_in_self
+    def get_friends_handler(self) -> FriendsHandler:
+        return FriendsHandler(self)
 
     @cache_in_self
     def get_stats_handler(self) -> StatsHandler:

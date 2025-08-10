@@ -1,0 +1,230 @@
+# Synapse Matrix 服务器 Docker Compose 配置 - Supabase 版本
+# 包含好友管理功能和 Supabase 数据库集成
+
+version: '3.8'
+
+services:
+  # Synapse Matrix 服务器
+  synapse:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.supabase
+    image: synapse-supabase:latest
+    container_name: synapse-matrix
+    restart: unless-stopped
+    ports:
+      - "8008:8008"   # HTTP 客户端 API
+      - "8448:8448"   # HTTPS 联邦 API
+    environment:
+      # 服务器配置
+      - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME}
+      - REPORT_STATS=${REPORT_STATS:-false}
+      
+      # Supabase 数据库配置
+      - SUPABASE_URL=${SUPABASE_URL:-https://gomidmecjarcriccnvyc.supabase.co}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_DB_HOST=${SUPABASE_DB_HOST:-db.gomidmecjarcriccnvyc.supabase.co}
+      - SUPABASE_DB_PORT=${SUPABASE_DB_PORT:-5432}
+      - SUPABASE_DB_USER=${SUPABASE_DB_USER:-postgres}
+      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
+      - SUPABASE_DB_NAME=${SUPABASE_DB_NAME:-postgres}
+      
+      # Redis 配置（可选）
+      - REDIS_ENABLED=${REDIS_ENABLED:-false}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      
+      # 安全密钥
+      - REGISTRATION_SHARED_SECRET=${REGISTRATION_SHARED_SECRET}
+      - MACAROON_SECRET_KEY=${MACAROON_SECRET_KEY}
+      - FORM_SECRET=${FORM_SECRET}
+      
+      # 功能配置
+      - ENABLE_REGISTRATION=${ENABLE_REGISTRATION:-false}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-50M}
+      
+      # 好友功能配置
+      - FRIENDS_ENABLED=${FRIENDS_ENABLED:-true}
+      - MAX_FRIENDS_PER_USER=${MAX_FRIENDS_PER_USER:-1000}
+      - FRIEND_REQUEST_TIMEOUT=${FRIEND_REQUEST_TIMEOUT:-604800}
+      - ALLOW_CROSS_DOMAIN_FRIENDS=${ALLOW_CROSS_DOMAIN_FRIENDS:-true}
+      
+      # 缓存配置
+      - CACHE_FACTOR=${CACHE_FACTOR:-0.5}
+      
+      # 邮件配置（可选）
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    volumes:
+      - synapse_data:/data
+      - synapse_logs:/logs
+      - ./ssl:/ssl:ro  # SSL 证书（如果有）
+    networks:
+      - synapse_network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.synapse.rule=Host(`${SYNAPSE_SERVER_NAME}`)"
+      - "traefik.http.routers.synapse.tls=true"
+      - "traefik.http.routers.synapse.tls.certresolver=letsencrypt"
+      - "traefik.http.services.synapse.loadbalancer.server.port=8008"
+
+  # Redis 缓存服务（可选但推荐）
+  redis:
+    image: redis:7-alpine
+    container_name: synapse-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - synapse_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx 反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: synapse-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - synapse_network
+    depends_on:
+      - synapse
+    profiles:
+      - nginx
+
+  # Element Web 客户端（可选）
+  element:
+    image: vectorim/element-web:latest
+    container_name: synapse-element
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./element-config.json:/app/config.json:ro
+    networks:
+      - synapse_network
+    profiles:
+      - element
+
+  # Coturn TURN 服务器（可选，用于 VoIP）
+  coturn:
+    image: coturn/coturn:latest
+    container_name: synapse-coturn
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      - "49152-65535:49152-65535/udp"
+    environment:
+      - COTURN_MIN_PORT=49152
+      - COTURN_MAX_PORT=65535
+      - COTURN_STATIC_AUTH_SECRET=${COTURN_STATIC_AUTH_SECRET}
+      - COTURN_REALM=${SYNAPSE_SERVER_NAME}
+    volumes:
+      - ./coturn.conf:/etc/coturn/turnserver.conf:ro
+    networks:
+      - synapse_network
+    profiles:
+      - coturn
+
+  # Prometheus 监控（可选）
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: synapse-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - synapse_network
+    profiles:
+      - monitoring
+
+  # Grafana 仪表板（可选）
+  grafana:
+    image: grafana/grafana:latest
+    container_name: synapse-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - synapse_network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+# 网络配置
+networks:
+  synapse_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# 数据卷配置
+volumes:
+  synapse_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data
+  
+  synapse_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/logs
+  
+  redis_data:
+    driver: local
+  
+  nginx_logs:
+    driver: local
+  
+  prometheus_data:
+    driver: local
+  
+  grafana_data:
+    driver: local
